@@ -65,10 +65,11 @@ def get_user(user_id: int, db: Session = Depends(get_db), token: str = Depends(a
 @router.post("/create_user")
 def create_user(user: User, db: Session = Depends(get_db)):
     try:
-
-        if not EMAIL_REGEX.match(user.email):
-            return {"status_code": HTTP_400_BAD_REQUEST, "message": "Invalid email address"}
-
+        if not validate_email(user.email):
+            return {"status_code": HTTP_400_BAD_REQUEST, "message": "Invalid email"}
+        if get_user_by_email(user.email, db):
+            return {"status_code": HTTP_400_BAD_REQUEST, "message": "Email already exists"}
+        
         new_user = {
             "email": user.email,
             "password": hash_password.hash(user.password)  # Use hash() method instead of calling the CryptContext object
@@ -77,14 +78,10 @@ def create_user(user: User, db: Session = Depends(get_db)):
             users.insert(                
             ).values(
                 new_user
-            ).returning(users.c.id)
+            )
         )
         db.commit()
-        user_id = result.fetchone()[0]
         return {"status_code": HTTP_201_CREATED, "message": "User created successfully"}
-    except IntegrityError as e:
-        db.rollback()
-        return {"status_code": HTTP_400_BAD_REQUEST, "message": "Email already exists"}
     except SQLAlchemyError as e:
         db.rollback()
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
@@ -106,6 +103,11 @@ def delete_user(user_id: int, db: Session = Depends(get_db), token: str = Depend
 @router.put("/update_user/{user_id}")
 def update_user(user_id: int, user: User, db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
     try:
+        if not validate_email(user.email):
+            return {"status_code": HTTP_400_BAD_REQUEST, "message": "Invalid email"}
+        
+        if get_user_by_email(user.email, db):
+            return {"status_code": HTTP_400_BAD_REQUEST, "message": "Email already exists"}
         query = db.execute(
             users.update().where(users.c.id == user_id).values(
                 email=user.email,
@@ -120,3 +122,12 @@ def update_user(user_id: int, user: User, db: Session = Depends(get_db), token: 
     except SQLAlchemyError as e:
         db.rollback()
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
+
+def get_user_by_email(email: str, db: Session):
+    query = db.execute(users.select().where(users.c.email == email)).first()
+    return query
+
+def validate_email(email: str):
+    if EMAIL_REGEX.match(email) is None:
+        return False
+    return True
