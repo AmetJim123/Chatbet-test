@@ -6,17 +6,21 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_204_NO_CONTENT
+from app.utils.security import hash_password
+from .login_router import authenticate_token
 
-from cryptography.fernet import Fernet
-
-key = Fernet_key = Fernet.generate_key()
-f = Fernet(key)
 
 router = APIRouter()
 
+SECRET_KEY = "your-secret-key"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
 @router.get("/get_all_users")
-def get_all_users(db: Session = Depends(get_db)):
+def get_all_users(db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
     try:
+        print("Token: ", token)
+        print("Get all users")
         query = db.execute(users.select().where(users.c.status == 1)).all()
         data = []
         for row in query:
@@ -30,7 +34,7 @@ def get_all_users(db: Session = Depends(get_db)):
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
 
 @router.get("/get_user/{user_id}")
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(user_id: int, db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
     try:
         query = db.execute(users.select().where(and_(users.c.id == user_id, users.c.status == 1))).first()
         if query:
@@ -51,7 +55,7 @@ def create_user(user: User, db: Session = Depends(get_db)):
     try:
         new_user = {
             "email": user.email,
-            "password": f.encrypt(user.password.encode("utf-8"))
+            "password": hash_password.hash(user.password)  # Use hash() method instead of calling the CryptContext object
         }
         result = db.execute(
             users.insert(                
@@ -67,7 +71,7 @@ def create_user(user: User, db: Session = Depends(get_db)):
     
 
 @router.put("/delete_user/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
     try:
         query = db.execute(users.update().where(users.c.id == user_id).values(status=0))
         db.commit()
@@ -80,15 +84,12 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
 
 @router.put("/update_user/{user_id}")
-def update_user(user_id: int, user: User, db: Session = Depends(get_db)):
+def update_user(user_id: int, user: User, db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
     try:
         query = db.execute(
-            users.update(
-            ).where(
-                users.c.id == user_id
-            ).values(
+            users.update().where(users.c.id == user_id).values(
                 email=user.email,
-                password=f.encrypt(user.password.encode("utf-8"))
+                password=hash_password.hash(user.password)  # Use hash() method instead of calling the CryptContext object
             )
         )
         db.commit()
