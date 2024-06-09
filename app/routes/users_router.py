@@ -4,10 +4,12 @@ from app.models.users_models import users
 from app.schemas.users_schemas import User
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from app.utils.security import hash_password
 from .login_router import authenticate_token
+import re
+
 
 
 router = APIRouter()
@@ -15,6 +17,8 @@ router = APIRouter()
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
 DEFAULT_PAGE_SIZE = 10
 
@@ -61,6 +65,10 @@ def get_user(user_id: int, db: Session = Depends(get_db), token: str = Depends(a
 @router.post("/create_user")
 def create_user(user: User, db: Session = Depends(get_db)):
     try:
+
+        if not EMAIL_REGEX.match(user.email):
+            return {"status_code": HTTP_400_BAD_REQUEST, "message": "Invalid email address"}
+
         new_user = {
             "email": user.email,
             "password": hash_password.hash(user.password)  # Use hash() method instead of calling the CryptContext object
@@ -69,10 +77,14 @@ def create_user(user: User, db: Session = Depends(get_db)):
             users.insert(                
             ).values(
                 new_user
-            )
+            ).returning(users.c.id)
         )
         db.commit()
+        user_id = result.fetchone()[0]
         return {"status_code": HTTP_201_CREATED, "message": "User created successfully"}
+    except IntegrityError as e:
+        db.rollback()
+        return {"status_code": HTTP_400_BAD_REQUEST, "message": "Email already exists"}
     except SQLAlchemyError as e:
         db.rollback()
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
