@@ -10,8 +10,6 @@ from app.utils.security import hash_password
 from .login_router import authenticate_token
 import re
 
-
-
 router = APIRouter()
 
 SECRET_KEY = "your-secret-key"
@@ -24,7 +22,17 @@ DEFAULT_PAGE_SIZE = 10
 
 @router.get("/get_all_users")
 def get_all_users(data: dict = Body(...), db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
+    """
+    Get all users with pagination.
 
+    Parameters:
+    - data (dict): The request body containing the page and page_size parameters.
+    - db (Session): The database session.
+    - token (str): The authentication token.
+
+    Returns:
+    - dict: The response containing the status code, message, and data (list of users).
+    """
     page = data.get("page", 1)
     page_size = data.get("page_size", DEFAULT_PAGE_SIZE)
 
@@ -47,6 +55,17 @@ def get_all_users(data: dict = Body(...), db: Session = Depends(get_db), token: 
 
 @router.get("/get_user/")
 def get_user(user_data: UserId , db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
+    """
+    Get a user by ID.
+
+    Parameters:
+    - user_data (UserId): The request body containing the user ID.
+    - db (Session): The database session.
+    - token (str): The authentication token.
+
+    Returns:
+    - dict: The response containing the status code, message, and data (user details).
+    """
     try:
         query = db.execute(users.select().where(and_(users.c.id == user_data.id, users.c.status == 1))).first()
         if query:
@@ -64,6 +83,16 @@ def get_user(user_data: UserId , db: Session = Depends(get_db), token: str = Dep
 
 @router.post("/create_user")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    Create a new user.
+
+    Parameters:
+    - user (UserCreate): The request body containing the user details.
+    - db (Session): The database session.
+
+    Returns:
+    - dict: The response containing the status code and message.
+    """
     try:
         if not validate_email(user.email):
             return {"status_code": HTTP_400_BAD_REQUEST, "message": "Invalid email"}
@@ -89,6 +118,17 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.put("/delete_user")
 def delete_user(user_id: UserId, db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
+    """
+    Delete a user by ID.
+
+    Parameters:
+    - user_id (UserId): The request body containing the user ID.
+    - db (Session): The database session.
+    - token (str): The authentication token.
+
+    Returns:
+    - dict: The response containing the status code and message.
+    """
     try:
         query = db.execute(users.update().where(users.c.id == user_id.id).values(status=0))
         db.commit()
@@ -103,8 +143,19 @@ def delete_user(user_id: UserId, db: Session = Depends(get_db), token: str = Dep
 @router.put("/update_user")
 @router.put("/update_user")
 def update_user(user: UserUpdate, db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
+    """
+    Update a user by ID.
+
+    Parameters:
+    - user (UserUpdate): The request body containing the user details.
+    - db (Session): The database session.
+    - token (str): The authentication token.
+
+    Returns:
+    - dict: The response containing the status code and message.
+    """
     try:
-        # Actualizar solo los campos proporcionados
+        # Update only the provided fields
         update_data = {}
         if user.email is not None:
             if not validate_email(user.email):
@@ -116,7 +167,7 @@ def update_user(user: UserUpdate, db: Session = Depends(get_db), token: str = De
         if user.password is not None:
             update_data["password"] = hash_password.hash(user.password)
 
-        # Realizar la actualización si hay datos para actualizar
+        # Perform the update if there is data to update
         if update_data:
             update_query = (
                 update(users)
@@ -136,10 +187,29 @@ def update_user(user: UserUpdate, db: Session = Depends(get_db), token: str = De
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
 
 def get_user_by_email(email: UserEmail, db: Session):
+    """
+    Get a user by email.
+
+    Parameters:
+    - email (UserEmail): The email of the user.
+    - db (Session): The database session.
+
+    Returns:
+    - object: The user object if found, None otherwise.
+    """
     query = db.execute(users.select().where(users.c.email == email)).first()
     return query
 
 def validate_email(email: UserEmail):
+    """
+    Validate an email address.
+
+    Parameters:
+    - email (UserEmail): The email address to validate.
+
+    Returns:
+    - bool: True if the email is valid, False otherwise.
+    """
     if EMAIL_REGEX.match(email) is None:
         return False
     return True
