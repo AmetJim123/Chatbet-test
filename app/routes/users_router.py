@@ -34,7 +34,10 @@ def get_all_users(data: dict = Body(...), db: Session = Depends(get_db), token: 
                 "email": row.email,
                 "status": row.status
             })
+        if len(data) == 0:
+            return {"status_code": HTTP_404_NOT_FOUND, "message": "No users found"}
         return {"status_code": HTTP_200_OK, "message": "Users found", "data": data}
+    
     except SQLAlchemyError as e:
         return {"status_code": HTTP_400_BAD_REQUEST, "message": str(e)}
 
