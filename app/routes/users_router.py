@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from app.database.database import get_db
 from app.models.users_models import users
 from app.schemas.users_schemas import User
@@ -16,12 +16,17 @@ SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+DEFAULT_PAGE_SIZE = 10
+
 @router.get("/get_all_users")
-def get_all_users(db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
+def get_all_users(data: dict = Body(...), db: Session = Depends(get_db), token: str = Depends(authenticate_token)):
+
+    page = data.get("page", 1)
+    page_size = data.get("page_size", DEFAULT_PAGE_SIZE)
+
     try:
-        print("Token: ", token)
-        print("Get all users")
-        query = db.execute(users.select().where(users.c.status == 1)).all()
+        offset = (page - 1) * page_size
+        query = db.execute(users.select().where(users.c.status == 1).offset(offset).limit(page_size)).all()
         data = []
         for row in query:
             data.append({
